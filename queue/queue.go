@@ -27,7 +27,9 @@ func (q *Queue) Remove() interface{} {
 	element := q.data.Front()
 	defer q.rwMutex.Unlock()
 	if element != nil {
-		return element.Value
+		val := element.Value
+		q.data.Remove(element)
+		return val
 	}
 	return nil
 }
