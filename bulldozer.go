@@ -58,8 +58,8 @@ func InitializeWorkers(workerCount int, respChan chan interface{}, task Task) ch
 // Scheduler returns the pipe send data on.
 // @args - the workers that are free.
 // the channel to call to exit the main program.
-func Scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan interface{}, workerCount int) (pipe chan int, finish chan int) {
-	pipe = make(chan int, workerCount)
+func Scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan interface{}, workerCount int) (pipe chan interface{}, finish chan int) {
+	pipe = make(chan interface{}, workerCount)
 	finish = make(chan int)
 	go func() {
 		for {
