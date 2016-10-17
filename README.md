@@ -1,28 +1,28 @@
 # bulldozer
-Bulldozer does shit load of work for you.
+Bulldozer does loads of work on the background. It can be used for working on embarassingly parallel problems. 
+
+```
+type Task interface {
+	Run(interface{}) interface{}
+}
+```
+
+It can run any `task type` that follows the interface definition mentioned above.
 
 ## Design
 ### Task
-* Init() -> channel for run, updatesChan
-* Run(  )
-     * Listens on the channel and if data comes in, works on it.
-     * If error occurs, response is sent on the update channel.
-     * Once it is done result is sent to update channel if any.
-* Finish() 
-    * closes both the channels. 
+As mentioned above.
 
 ### Bulldozer 
-* Create a channel which is buffered channel of TaskRun Channels.
-* Start a global Channel which listens for DataInput.
-* Accepts a set of Tasks.
-* Calls the Init() of all the tasks.
-    * Start goroutines listening on updates.
-    * Push each channel to the buffered channel list.
-* Start goroutines that listens for updates.
-* Have a function that is global which which accepts the input.
-* Get one of the channels from the free list.
-* Push data to it.
+* Initialize workers
+	>> Goroutines that are ready to work are initialized.
+	>> Initialized with a worker which has the embarassingly parallel function.
+* Scheduler
+	>> The scheduler handles the initialized go-routines and divides work among them.
+	>> The exit signal is received to signal the end of execution.
+* respChan
+	>> This is the channel where the response from the work comes out.
+* Finish signal.
+	>> This can be used to finish the execution of the workers.
 
 ### Test
-
-Create n workers. The run function appends worker id to the input and returns it.# bulldozer

@@ -5,26 +5,26 @@ import (
 )
 
 type Task interface {
-	Run(int)
+	Run(interface{}) interface{}
 }
 
 type MyTask struct {
-	Id int
 }
 
-func (mt *MyTask) Run(data int) {
-	fmt.Println("Data is ", data)
+func (mt *MyTask) Run(data interface{}) interface{} {
+	res := fmt.Sprintf("Data is %d", data)
+	return res
 }
 
 type WorkerChannel struct {
-	Receiver chan int
+	Receiver chan interface{}
 	Finisher chan int
 	ChanTask Task
 }
 
 func NewWorkerChannel(goRoutineCount int, task Task) *WorkerChannel {
 	return &WorkerChannel{
-		Receiver: make(chan int, goRoutineCount),
+		Receiver: make(chan interface{}, goRoutineCount),
 		Finisher: make(chan int),
 		ChanTask: task,
 	}
@@ -32,13 +32,14 @@ func NewWorkerChannel(goRoutineCount int, task Task) *WorkerChannel {
 
 // Send the channel to resp to.
 // id is there just for making the logs better of.
-func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, id int) {
+func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, respChan chan interface{}, id int) {
 	go func() {
 		for {
 			select {
 			case data := <-myChan.Receiver:
 				// Processing task
-				myChan.ChanTask.Run(data)
+				result := myChan.ChanTask.Run(data)
+				respChan <- result
 				// Done let me ask for more work.
 				freeChan <- myChan
 			case <-myChan.Finisher:
@@ -47,16 +48,15 @@ func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, id int) {
 				return
 			}
 		}
-
 	}()
 }
 
-func initializeWorkers(workerCount int, task Task) chan *WorkerChannel {
+func initializeWorkers(workerCount int, respChan chan interface{}, task Task) chan *WorkerChannel {
 	freeWorkerChan := make(chan *WorkerChannel, workerCount)
 	func() {
 		for i := 0; i < workerCount; i++ {
 			workerChan := NewWorkerChannel(workerCount, task)
-			worker(workerChan, freeWorkerChan, i)
+			worker(workerChan, freeWorkerChan, respChan, i)
 			// Everyone is free right now. Ask for some work please !
 			freeWorkerChan <- workerChan
 		}
@@ -66,7 +66,7 @@ func initializeWorkers(workerCount int, task Task) chan *WorkerChannel {
 
 // Scheduler returns the pipe send data on.
 // @args - the workers that are free.
-func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, workerCount int) (pipe chan int, finish chan int) {
+func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan interface{}, workerCount int) (pipe chan int, finish chan int) {
 	pipe = make(chan int, workerCount)
 	finish = make(chan int)
 	go func() {
@@ -88,6 +88,7 @@ func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, workerCoun
 				}
 				close(pipe)
 				close(finish)
+				close(resp)
 				exitChan <- 1
 				return
 			}
@@ -100,19 +101,21 @@ func main() {
 	exitChan := make(chan int)
 	workerCount := 100
 	mt := &MyTask{}
-	freeWorkerChan := initializeWorkers(workerCount, mt)
-	pipe, finish := scheduler(freeWorkerChan, exitChan, workerCount)
+	respChan := make(chan interface{}, workerCount)
+	freeWorkerChan := initializeWorkers(workerCount, respChan, mt)
+	input, finish := scheduler(freeWorkerChan, exitChan, respChan, workerCount)
+
+	go func() {
+		for i := 0; i < 100000; i++ {
+			resp := <-respChan
+			fmt.Println(resp)
+		}
+	}()
 
 	for i := 0; i < 100000; i++ {
-		//		time.Sleep(1 * time.Millisecond)
-		pipe <- i
-	}
-
-	for i := 0; i < 100000; i++ {
-		pipe <- i
+		input <- i
 	}
 
 	finish <- 1
-	//	finish <- 1
 	<-exitChan
 }
