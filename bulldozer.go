@@ -44,7 +44,7 @@ func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, respChan chan i
 // Creates as many go routines as needed to listen to the tasks.
 func InitializeWorkers(workerCount int, respChan chan interface{}, task Task) chan *WorkerChannel {
 	freeWorkerChan := make(chan *WorkerChannel, workerCount)
-	func() {
+	go func() {
 		for i := 0; i < workerCount; i++ {
 			workerChan := NewWorkerChannel(workerCount, task)
 			worker(workerChan, freeWorkerChan, respChan, i)
