@@ -1,20 +1,8 @@
-package main
+package bulldozer
 
 import (
 	"fmt"
 )
-
-type Task interface {
-	Run(interface{}) interface{}
-}
-
-type MyTask struct {
-}
-
-func (mt *MyTask) Run(data interface{}) interface{} {
-	res := fmt.Sprintf("Data is %d", data)
-	return res
-}
 
 type WorkerChannel struct {
 	Receiver chan interface{}
@@ -51,7 +39,10 @@ func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, respChan chan i
 	}()
 }
 
-func initializeWorkers(workerCount int, respChan chan interface{}, task Task) chan *WorkerChannel {
+// Function to initialize the workers.
+// Registers the task with the embarresingly parallel run funtion.
+// Creates as many go routines as needed to listen to the tasks.
+func InitializeWorkers(workerCount int, respChan chan interface{}, task Task) chan *WorkerChannel {
 	freeWorkerChan := make(chan *WorkerChannel, workerCount)
 	func() {
 		for i := 0; i < workerCount; i++ {
@@ -66,7 +57,8 @@ func initializeWorkers(workerCount int, respChan chan interface{}, task Task) ch
 
 // Scheduler returns the pipe send data on.
 // @args - the workers that are free.
-func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan interface{}, workerCount int) (pipe chan int, finish chan int) {
+// the channel to call to exit the main program.
+func Scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan interface{}, workerCount int) (pipe chan int, finish chan int) {
 	pipe = make(chan int, workerCount)
 	finish = make(chan int)
 	go func() {
@@ -80,11 +72,11 @@ func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan 
 			case <-finish:
 				// Make sure all the workerChan's are done
 				freeChan.Finisher <- 1
-				fmt.Println("Closed i")
+				fmt.Println("Closed 0")
 				for i := 0; i < workerCount-1; i++ {
 					freeChan := <-freeWorkerChan
 					freeChan.Finisher <- 1
-					fmt.Println("Closed ", i)
+					fmt.Println("Closed", i+1)
 				}
 				close(pipe)
 				close(finish)
@@ -95,27 +87,4 @@ func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, resp chan 
 		}
 	}()
 	return
-}
-
-func main() {
-	exitChan := make(chan int)
-	workerCount := 100
-	mt := &MyTask{}
-	respChan := make(chan interface{}, workerCount)
-	freeWorkerChan := initializeWorkers(workerCount, respChan, mt)
-	input, finish := scheduler(freeWorkerChan, exitChan, respChan, workerCount)
-
-	go func() {
-		for i := 0; i < 100000; i++ {
-			resp := <-respChan
-			fmt.Println(resp)
-		}
-	}()
-
-	for i := 0; i < 100000; i++ {
-		input <- i
-	}
-
-	finish <- 1
-	<-exitChan
 }

@@ -2,56 +2,39 @@
 package bulldozer
 
 import (
+	"fmt"
 	"testing"
 )
 
-type Worker struct {
-	Id         int
-	runChan    chan int
-	resultChan chan string
+type MyTask struct {
 }
 
-// While initializing.
-// Send back channel to.
-// listen for input.
-// respond to the input.
-
-// @input is an integer.
-// @output is a string corresponding to the integer input.
-func (w *Worker) Init() (chan int, chan string) {
-	w.runChan = make(chan int)
-	w.resultChan = make(chan string)
-	go Run()
-	return w.runChan, w.resultChan
-}
-
-func (w *Worker) Run() {
-	data := <-w.runChan
-	res := fmt.Sprintf("Worker with Id %d processing input %d", Id, data)
-	resultChan <- res
-}
-
-func (w *Worker) Finish() {
-	close(w.runChan)
-	close(w.resultChan)
+func (mt *MyTask) Run(data interface{}) interface{} {
+	res := fmt.Sprintf("Data is %d", data)
+	return res
 }
 
 func TestNWorkers(t *testing.T) {
-	var workerList []*Worker
-	worker1 := &Worker{Id: 9}
-	worker2 := &Worker{Id: 19}
-	worker3 := &Worker{Id: 29}
-
-	workerList = append(workerList, worker1)
-	workerList = append(workerList, worker2)
-	workerList = append(workerList, worker3)
-	bull := NewBulldozer(workerList)
-
-	for i := 1; i < 100; i++ {
-		resp, err := bull.DoWork(i)
-		if err != nil {
-			t.Error("Could not get anything done", err.Error())
+	exitChan := make(chan int)
+	workerCount := 3
+	mt := &MyTask{}
+	respChan := make(chan interface{}, workerCount)
+	freeWorkerChan := InitializeWorkers(workerCount, respChan, mt)
+	input, finish := Scheduler(freeWorkerChan, exitChan, respChan, workerCount)
+	done := make(chan int)
+	go func() {
+		for i := 0; i < 100000; i++ {
+			resp := <-respChan
+			fmt.Println(resp)
 		}
-		t.Log("Response for ", i, " ", resp)
+		done <- 1
+	}()
+
+	for i := 0; i < 100000; i++ {
+		input <- i
 	}
+
+	<-done
+	finish <- 1
+	<-exitChan
 }
