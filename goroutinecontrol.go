@@ -2,18 +2,31 @@ package main
 
 import (
 	"fmt"
-	"time"
 )
+
+type Task interface {
+	Run(int)
+}
+
+type MyTask struct {
+	Id int
+}
+
+func (mt *MyTask) Run(data int) {
+	fmt.Println("Data is ", data)
+}
 
 type WorkerChannel struct {
 	Receiver chan int
 	Finisher chan int
+	ChanTask Task
 }
 
-func NewWorkerChannel(goRoutineCount int) *WorkerChannel {
+func NewWorkerChannel(goRoutineCount int, task Task) *WorkerChannel {
 	return &WorkerChannel{
 		Receiver: make(chan int, goRoutineCount),
 		Finisher: make(chan int),
+		ChanTask: task,
 	}
 }
 
@@ -25,7 +38,7 @@ func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, id int) {
 			select {
 			case data := <-myChan.Receiver:
 				// Processing task
-				fmt.Println("Channel id ", id, " ", data)
+				myChan.ChanTask.Run(data)
 				// Done let me ask for more work.
 				freeChan <- myChan
 			case <-myChan.Finisher:
@@ -38,12 +51,11 @@ func worker(myChan *WorkerChannel, freeChan chan *WorkerChannel, id int) {
 	}()
 }
 
-func initializeWorkers(workerCount int) chan *WorkerChannel {
+func initializeWorkers(workerCount int, task Task) chan *WorkerChannel {
 	freeWorkerChan := make(chan *WorkerChannel, workerCount)
 	func() {
 		for i := 0; i < workerCount; i++ {
-
-			workerChan := NewWorkerChannel(workerCount)
+			workerChan := NewWorkerChannel(workerCount, task)
 			worker(workerChan, freeWorkerChan, i)
 			// Everyone is free right now. Ask for some work please !
 			freeWorkerChan <- workerChan
@@ -55,7 +67,6 @@ func initializeWorkers(workerCount int) chan *WorkerChannel {
 // Scheduler returns the pipe send data on.
 // @args - the workers that are free.
 func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, workerCount int) (pipe chan int, finish chan int) {
-
 	pipe = make(chan int, workerCount)
 	finish = make(chan int)
 	go func() {
@@ -88,17 +99,14 @@ func scheduler(freeWorkerChan chan *WorkerChannel, exitChan chan int, workerCoun
 func main() {
 	exitChan := make(chan int)
 	workerCount := 100
-	freeWorkerChan := initializeWorkers(workerCount)
-
+	mt := &MyTask{}
+	freeWorkerChan := initializeWorkers(workerCount, mt)
 	pipe, finish := scheduler(freeWorkerChan, exitChan, workerCount)
 
-	// Pumping data in for the worker
 	for i := 0; i < 100000; i++ {
 		//		time.Sleep(1 * time.Millisecond)
 		pipe <- i
 	}
-
-	time.Sleep(5 * time.Second)
 
 	for i := 0; i < 100000; i++ {
 		pipe <- i
